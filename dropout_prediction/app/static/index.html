@@ -5,15 +5,42 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Dropout Risk</title>
   <meta name="color-scheme" content="light dark">
+  <link rel="icon" href="/static/logo.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
+  <!-- Fluid background -->
+  <div class="bg" id="bg" aria-hidden="true">
+    <span class="blob b1"></span><span class="blob b2"></span><span class="blob b3"></span><span class="blob b4"></span>
+  </div>
+
+  <!-- Intro splash (shown once per session) -->
+  <div class="splash" id="splash" hidden aria-hidden="true">
+    <div class="splash-inner">
+      <svg class="logo logo-xl" id="splash-logo" viewBox="0 0 32 32"></svg>
+      <span class="splash-word">Dropout Risk</span>
+    </div>
+  </div>
+
+  <template id="logo-tpl"><svg>
+    <g fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2">
+      <path class="lp lp1" pathLength="1" stroke="currentColor" d="M16 4.5 28 10.5 16 16.5 4 10.5Z"/>
+      <path class="lp lp2" pathLength="1" stroke="currentColor" d="M9 13.2v4.6c0 1.9 3.1 3.4 7 3.4s7-1.5 7-3.4v-4.6"/>
+      <path class="lp lp3" pathLength="1" stroke="currentColor" d="M28 10.5v5.5"/>
+      <path class="lp lp4" pathLength="1" stroke="var(--accent)" d="M4 27.5c7 0 14.5-1.2 22-5.5"/>
+      <circle class="ldot" cx="26.6" cy="21.6" r="1.9" fill="var(--accent)"/>
+    </g>
+  </svg></template>
+
   <header class="topbar">
     <div class="topbar-inner">
-      <span class="wordmark">Dropout Risk</span>
+      <a class="brand" href="/" aria-label="Dropout Risk home">
+        <svg class="logo" id="brand-logo" viewBox="0 0 32 32" aria-hidden="true"></svg>
+        <span class="wordmark">Dropout Risk</span>
+      </a>
       <nav class="segmented nav" role="tablist" aria-label="Views">
         <button role="tab" data-view="student" aria-selected="true">Student</button>
         <button role="tab" data-view="batch" aria-selected="false">Batch</button>
@@ -21,6 +48,26 @@
       </nav>
     </div>
   </header>
+
+  <script>
+    // Runs before first paint: fill the logos and decide whether to show the intro splash.
+    (function () {
+      var tpl = document.getElementById("logo-tpl");
+      document.querySelectorAll("svg.logo").forEach(function (svg) {
+        svg.appendChild(document.importNode(tpl.content.querySelector("g"), true));
+      });
+      var seen = false;
+      try { seen = sessionStorage.getItem("splashSeen") === "1"; } catch (e) {}
+      var still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+      if (!seen && !still) {
+        document.getElementById("splash").hidden = false;
+        document.getElementById("splash-logo").classList.add("draw");
+        document.documentElement.classList.add("splashing");
+      } else {
+        document.getElementById("brand-logo").classList.add("draw");
+      }
+    })();
+  </script>
 
   <main>
     <!-- Student -->
@@ -35,18 +82,16 @@
           <div class="ring-wrap">
             <svg class="ring" viewBox="0 0 120 120" aria-hidden="true">
               <circle class="ring-track" cx="60" cy="60" r="52"/>
-              <circle class="ring-value" id="ring-value" cx="60" cy="60" r="52"/>
+              <circle class="ring-value" cx="60" cy="60" r="52"/>
             </svg>
-            <div class="ring-label"><span id="result-pct">–</span><small>%</small></div>
+            <div class="ring-label"><span class="pct-num">–</span><small>%</small></div>
           </div>
-          <h2 class="outcome" id="result-outcome">&nbsp;</h2>
-
-          <ul class="bars" id="result-bars"></ul>
-
+          <h2 class="outcome">&nbsp;</h2>
+          <ul class="bars"></ul>
           <div class="drivers">
             <h3>Effect on dropout risk</h3>
-            <ul id="drivers"></ul>
-            <p class="quiet" id="drivers-empty">Change a value to see its effect on dropout risk.</p>
+            <ul class="drivers-list"></ul>
+            <p class="quiet drivers-empty">Change a value to see its effect on dropout risk.</p>
           </div>
         </aside>
 
@@ -61,17 +106,14 @@
               <div><h4>2nd semester</h4><div class="fields" data-group="academic-2"></div></div>
             </div>
           </div>
-
           <div class="card">
             <div class="card-head"><h3>Finances</h3></div>
             <div class="fields list" data-group="finances"></div>
           </div>
-
           <div class="card">
             <div class="card-head"><h3>Profile</h3></div>
             <div class="fields" data-group="profile"></div>
           </div>
-
           <details class="card disclosure">
             <summary><h3>More details</h3><span class="chevron" aria-hidden="true"></span></summary>
             <div class="fields two-col" data-group="more"></div>
@@ -88,43 +130,83 @@
     <section class="view" id="view-batch" role="tabpanel" hidden>
       <div class="view-head">
         <h1>Batch</h1>
-        <p class="lede">Score a whole cohort from a CSV in the original format.</p>
+        <p class="lede">Score a whole cohort and see who needs support.</p>
       </div>
 
-      <label class="dropzone card" id="dropzone">
-        <input type="file" id="file" accept=".csv,text/csv" hidden>
-        <span class="dz-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24" width="28" height="28"><path d="M12 16V4m0 0-4.5 4.5M12 4l4.5 4.5M5 15v3a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </span>
-        <span class="dz-title">Drop a CSV here, or <u>browse</u></span>
-        <span class="quiet" id="dz-status">Semicolon or comma separated</span>
-      </label>
+      <div id="batch-empty">
+        <label class="dropzone card" id="dropzone">
+          <input type="file" id="file" accept=".csv,text/csv" hidden>
+          <span class="dz-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="28" height="28"><path d="M12 16V4m0 0-4.5 4.5M12 4l4.5 4.5M5 15v3a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </span>
+          <span class="dz-title">Drop a CSV here, or <u>browse</u></span>
+          <span class="quiet" id="dz-status">Same columns as the original dataset</span>
+        </label>
+        <div class="empty-actions">
+          <button class="text-button" id="try-sample" type="button">Try with sample data</button>
+          <span class="dot-sep" aria-hidden="true"></span>
+          <button class="text-button" id="get-template" type="button">Download template</button>
+        </div>
+      </div>
 
       <p class="error" id="batch-error" hidden></p>
 
       <div id="batch-result" hidden>
-        <div class="card summary">
-          <div class="summary-head">
-            <div>
-              <span class="big-number" id="batch-rows"></span>
-              <span class="quiet">students scored</span>
-            </div>
-            <div class="summary-actions">
-              <span class="chip" id="batch-accuracy" hidden></span>
-              <button class="button" id="download" type="button">Download results</button>
-            </div>
+        <div class="batch-hero rise">
+          <div>
+            <p class="eyebrow" id="batch-file"></p>
+            <h2 class="headline"><span class="hl-num" id="hl-count">0</span> <span id="hl-noun">students</span> may need support</h2>
+            <p class="hero-sub" id="hl-sub"></p>
           </div>
-          <div class="stack" id="batch-stack"></div>
-          <ul class="legend" id="batch-legend"></ul>
+          <div class="hero-actions">
+            <button class="button ghost" id="new-file" type="button">New file</button>
+            <button class="button" id="download-all" type="button">Download all</button>
+          </div>
         </div>
 
-        <div class="card table-card">
-          <div class="card-head"><h3>Highest dropout risk</h3><span class="quiet" id="table-note"></span></div>
+        <div class="tiers rise" id="tiers" role="group" aria-label="Filter by risk tier"></div>
+
+        <div class="chart-grid rise">
+          <div class="card">
+            <div class="card-head"><h3>Dropout risk spread</h3><span class="quiet">Tap a bar to filter</span></div>
+            <div class="hist" id="hist" role="group" aria-label="Students by dropout risk"></div>
+            <div class="hist-axis"><span>0%</span><span>50%</span><span>100%</span></div>
+          </div>
+          <div class="card">
+            <div class="card-head"><h3>By course</h3><span class="quiet">Average dropout risk</span></div>
+            <div class="courses" id="courses" role="group" aria-label="Average dropout risk by course"></div>
+          </div>
+        </div>
+
+        <div class="card accuracy-card rise" id="accuracy-card" hidden>
+          <div class="card-head">
+            <h3>How often the model was right</h3>
+            <span class="acc-value" id="acc-value"></span>
+          </div>
+          <div class="confusion" id="confusion"></div>
+          <p class="quiet">Rows are the actual outcome, columns the prediction. Tap a cell to see those students.</p>
+        </div>
+
+        <div class="card list-card rise">
+          <div class="list-toolbar">
+            <h3>Students <span class="count" id="list-count"></span></h3>
+            <div class="toolbar-right">
+              <div class="search"><input type="search" id="search" placeholder="Search course or row" aria-label="Search students"></div>
+              <button class="text-button" id="download-filtered" type="button" hidden></button>
+            </div>
+          </div>
+          <div class="chips" id="chips"></div>
           <div class="table-scroll">
-            <table>
-              <thead><tr><th>Row</th><th>Course</th><th>Prediction</th><th class="num">Dropout</th><th class="num">Enrolled</th><th class="num">Graduate</th></tr></thead>
-              <tbody id="batch-table"></tbody>
+            <table class="students">
+              <thead><tr id="thead-row"></tr></thead>
+              <tbody id="rows"></tbody>
             </table>
+            <p class="empty-list quiet" id="empty-list" hidden>No students match these filters.</p>
+          </div>
+          <div class="pager">
+            <button class="icon-button" id="prev" type="button" aria-label="Previous page"><svg viewBox="0 0 24 24" width="18" height="18"><path d="M15 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+            <span id="page-info" class="quiet"></span>
+            <button class="icon-button" id="next" type="button" aria-label="Next page"><svg viewBox="0 0 24 24" width="18" height="18"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
           </div>
         </div>
       </div>
@@ -145,6 +227,41 @@
     </section>
   </main>
 
+  <!-- Student detail sheet (Batch) -->
+  <div class="sheet-backdrop" id="sheet-backdrop" hidden></div>
+  <aside class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title" hidden>
+    <div class="sheet-grabber" aria-hidden="true"></div>
+    <header class="sheet-head">
+      <div>
+        <p class="eyebrow" id="sheet-eyebrow"></p>
+        <h2 id="sheet-title"></h2>
+      </div>
+      <button class="icon-button" id="sheet-close" type="button" aria-label="Close">
+        <svg viewBox="0 0 24 24" width="18" height="18"><path d="M6 6l12 12M18 6 6 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      </button>
+    </header>
+    <div class="sheet-body result" id="sheet-result">
+      <div class="ring-wrap small">
+        <svg class="ring" viewBox="0 0 120 120" aria-hidden="true">
+          <circle class="ring-track" cx="60" cy="60" r="52"/>
+          <circle class="ring-value" cx="60" cy="60" r="52"/>
+        </svg>
+        <div class="ring-label"><span class="pct-num">–</span><small>%</small></div>
+      </div>
+      <h2 class="outcome">&nbsp;</h2>
+      <p class="actual-line quiet" id="sheet-actual" hidden></p>
+      <ul class="bars"></ul>
+      <div class="drivers">
+        <h3>Effect on dropout risk</h3>
+        <ul class="drivers-list"></ul>
+        <p class="quiet drivers-empty">Close to a typical student; nothing stands out.</p>
+      </div>
+      <dl class="facts" id="sheet-facts"></dl>
+      <button class="button wide" id="open-student" type="button">Open in Student view</button>
+    </div>
+  </aside>
+
+  <div class="tooltip" id="tooltip" role="tooltip" hidden></div>
   <div class="toast" id="toast" role="status" hidden></div>
   <script src="/static/app.js"></script>
 </body>

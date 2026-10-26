@@ -18,12 +18,12 @@ import joblib
 import numpy as np
 import pandas as pd
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from src.features import (APPLICATION_MODE, COURSE_NAMES, MARITAL_STATUS, MODELS_DIR, NATIONALITY, QUALIFICATION,
-                          clean_columns)
+from src.features import (APPLICATION_MODE, COURSE_NAMES, DATA_PATH, MARITAL_STATUS, MODELS_DIR, NATIONALITY,
+                          QUALIFICATION, clean_columns)
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
@@ -83,6 +83,17 @@ assert sorted(f[0] for f in FIELDS) == sorted(INPUTS), "UI schema must cover eve
 LABELS = {f[0]: f[1] for f in FIELDS}
 SEMESTER_PREFIX = {"academic-1": "1st sem ", "academic-2": "2nd sem "}
 DRIVER_LABELS = {f[0]: SEMESTER_PREFIX.get(f[2], "") + f[1].lower() if f[2] in SEMESTER_PREFIX else f[1] for f in FIELDS}
+
+
+TIERS = [
+    {"key": "High", "min": 0.6, "max": 1.0, "label": "High risk", "hint": "Dropout chance 60% or more"},
+    {"key": "Watch", "min": 0.3, "max": 0.6, "label": "Watch", "hint": "Dropout chance 30–60%"},
+    {"key": "Low", "min": 0.0, "max": 0.3, "label": "Low risk", "hint": "Dropout chance under 30%"},
+]
+
+
+def risk_tier(p_dropout):
+    return next(t["key"] for t in TIERS if p_dropout >= t["min"])
 
 
 def default_value(col):
@@ -159,19 +170,39 @@ def get_meta():
     }
 
 
+# A semester's results move together (passed can't exceed enrolled), so each semester is one factor.
+SEMESTER_GROUPS = {s: [sem(s, m) for m in ("credited", "enrolled", "evaluations", "approved", "grade", "without evaluations")]
+                   for s in ("1st", "2nd")}
+GROUPED = {c for cols in SEMESTER_GROUPS.values() for c in cols}
+
+
+def factors(values):
+    """Changed inputs as (text, columns) pairs; each semester's results count as one factor."""
+    out = []
+    for s, cols in SEMESTER_GROUPS.items():
+        if any(values[c] != DEFAULTS[c] for c in cols):
+            passed, enrolled = values[sem(s, "approved")], values[sem(s, "enrolled")]
+            grade = values[sem(s, "grade")]
+            out.append((f"{s} semester · {passed:g} of {enrolled:g} passed, avg {grade:.1f}", cols))
+    out += [(describe(c, values[c]), [c]) for c in INPUTS if c not in GROUPED and values[c] != DEFAULTS[c]]
+    return out
+
+
 @app.post("/api/predict")
 def predict(req: PredictRequest):
     values = {**DEFAULTS, **{k: v for k, v in req.values.items() if k in DEFAULTS}}
-    changed = [c for c in INPUTS if values[c] != DEFAULTS[c]]
-    rows = [values] + [{**values, c: DEFAULTS[c]} for c in changed]
+    changed = factors(values)
+    # Effect of a factor = how much it alone moves a typical (all-default) student's dropout risk.
+    # Measured from the typical student, not from this one, so it stays informative even when risk is near 100%.
+    rows = [values, DEFAULTS] + [{**DEFAULTS, **{c: values[c] for c in cols}} for _, cols in changed]
     proba = model.predict_proba(pd.DataFrame(rows)[INPUTS])
-    current = proba[0]
-    effects = [(c, float(current[DROPOUT] - p[DROPOUT])) for c, p in zip(changed, proba[1:])]
+    current, typical = proba[0], proba[1]
+    effects = [(text, float(p[DROPOUT] - typical[DROPOUT])) for (text, _), p in zip(changed, proba[2:])]
     effects = sorted((e for e in effects if abs(e[1]) >= 0.01), key=lambda e: -abs(e[1]))[:3]
     return {
         "label": CLASSES[int(current.argmax())],
         "probabilities": {c: float(p) for c, p in zip(CLASSES, current)},
-        "drivers": [{"text": describe(c, values[c]), "effect": round(e, 4)} for c, e in effects],
+        "drivers": [{"text": text, "effect": round(e, 4)} for text, e in effects],
     }
 
 
@@ -186,26 +217,48 @@ def batch(req: BatchRequest):
         raise HTTPException(422, {"message": f"{len(missing)} required column(s) missing", "missing": missing})
     if frame.empty:
         raise HTTPException(422, {"message": "The file has no rows", "missing": []})
+    blanks = [c for c in INPUTS if frame[c].isna().any()]
+    if blanks:
+        raise HTTPException(422, {"message": f"Empty cells in {len(blanks)} column(s)", "missing": blanks})
+    non_numeric = [c for c in INPUTS if not pd.api.types.is_numeric_dtype(frame[c])]
+    if non_numeric:
+        raise HTTPException(422, {"message": f"Non-numeric values in {len(non_numeric)} column(s)", "missing": non_numeric})
 
+    frame = frame.reset_index(drop=True)
     proba = model.predict_proba(frame[INPUTS])
     pred = np.array(CLASSES)[proba.argmax(axis=1)]
-    out = pd.DataFrame(proba.round(4), columns=[f"P({c})" for c in CLASSES])
-    out.insert(0, "Prediction", pred)
-    full = pd.concat([out, frame.reset_index(drop=True)], axis=1)
+    targets = frame["Target"].astype(str).str.strip().to_numpy() if "Target" in frame else None
+    inputs = frame[INPUTS].to_numpy().tolist()  # one list per row, in INPUTS order (keeps the payload small)
 
-    order = np.argsort(-proba[:, DROPOUT])[:100]
-    top = [{"row": int(i) + 1,
-            "course": COURSE_NAMES.get(int(frame["Course"].iloc[i]), f"Code {int(frame['Course'].iloc[i])}"),
+    rows = []
+    for i in range(len(frame)):
+        course = int(frame["Course"].iloc[i])
+        rows.append({
+            "id": i + 1,
+            "course": COURSE_NAMES.get(course, f"Code {course}"),
             "label": pred[i],
-            "probabilities": {c: float(proba[i, j]) for j, c in enumerate(CLASSES)}} for i in order]
-    accuracy = float((pred == frame["Target"].astype(str).str.strip().to_numpy()).mean()) if "Target" in frame else None
+            "p": {c: round(float(proba[i, j]), 4) for j, c in enumerate(CLASSES)},
+            "tier": risk_tier(proba[i, DROPOUT]),
+            "target": targets[i] if targets is not None else None,
+            "v": [int(x) if float(x).is_integer() else x for x in inputs[i]],
+        })
     return {
-        "rows": int(len(frame)),
-        "counts": {c: int((pred == c).sum()) for c in CLASSES},
-        "accuracy": accuracy,
-        "top": top,
-        "csv": full.to_csv(index=False),
+        "columns": INPUTS,
+        "rows": rows,
+        "hasTarget": targets is not None,
+        "accuracy": float((pred == targets).mean()) if targets is not None else None,
+        "tiers": TIERS,
     }
+
+
+@app.get("/api/sample", response_class=PlainTextResponse)
+def sample():
+    return DATA_PATH.read_text(encoding="utf-8-sig")
+
+
+@app.get("/api/template", response_class=PlainTextResponse)
+def template():
+    return ";".join(INPUTS) + "\n"
 
 
 if __name__ == "__main__":

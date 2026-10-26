@@ -1,0 +1,10 @@
+# Python
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# Datasets: only the one file the project reads is tracked
+Analysis/*
+!Analysis/Track_1_Academic_Performance_and_Dropout/
+Analysis/Track_1_Academic_Performance_and_Dropout/*
+!Analysis/Track_1_Academic_Performance_and_Dropout/predict_students_dropout_uci/
