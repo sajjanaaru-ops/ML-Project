@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dropout Risk</title>
+  <meta name="color-scheme" content="light dark">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <span class="wordmark">Dropout Risk</span>
+      <nav class="segmented nav" role="tablist" aria-label="Views">
+        <button role="tab" data-view="student" aria-selected="true">Student</button>
+        <button role="tab" data-view="batch" aria-selected="false">Batch</button>
+        <button role="tab" data-view="model" aria-selected="false">Model</button>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <!-- Student -->
+    <section class="view" id="view-student" role="tabpanel">
+      <div class="view-head">
+        <h1>Student</h1>
+        <p class="lede">Adjust any value. The prediction updates instantly.</p>
+      </div>
+
+      <div class="student-grid">
+        <aside class="result card" id="result" aria-live="polite">
+          <div class="ring-wrap">
+            <svg class="ring" viewBox="0 0 120 120" aria-hidden="true">
+              <circle class="ring-track" cx="60" cy="60" r="52"/>
+              <circle class="ring-value" id="ring-value" cx="60" cy="60" r="52"/>
+            </svg>
+            <div class="ring-label"><span id="result-pct">–</span><small>%</small></div>
+          </div>
+          <h2 class="outcome" id="result-outcome">&nbsp;</h2>
+
+          <ul class="bars" id="result-bars"></ul>
+
+          <div class="drivers">
+            <h3>Effect on dropout risk</h3>
+            <ul id="drivers"></ul>
+            <p class="quiet" id="drivers-empty">Change a value to see its effect on dropout risk.</p>
+          </div>
+        </aside>
+
+        <div class="inputs">
+          <div class="card">
+            <div class="card-head">
+              <h3>Academic</h3>
+              <button class="text-button" id="reset" type="button">Reset</button>
+            </div>
+            <div class="semesters">
+              <div><h4>1st semester</h4><div class="fields" data-group="academic-1"></div></div>
+              <div><h4>2nd semester</h4><div class="fields" data-group="academic-2"></div></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-head"><h3>Finances</h3></div>
+            <div class="fields list" data-group="finances"></div>
+          </div>
+
+          <div class="card">
+            <div class="card-head"><h3>Profile</h3></div>
+            <div class="fields" data-group="profile"></div>
+          </div>
+
+          <details class="card disclosure">
+            <summary><h3>More details</h3><span class="chevron" aria-hidden="true"></span></summary>
+            <div class="fields two-col" data-group="more"></div>
+          </details>
+        </div>
+      </div>
+
+      <div class="peek" id="peek" aria-hidden="true">
+        <span class="peek-dot"></span><span id="peek-text"></span>
+      </div>
+    </section>
+
+    <!-- Batch -->
+    <section class="view" id="view-batch" role="tabpanel" hidden>
+      <div class="view-head">
+        <h1>Batch</h1>
+        <p class="lede">Score a whole cohort from a CSV in the original format.</p>
+      </div>
+
+      <label class="dropzone card" id="dropzone">
+        <input type="file" id="file" accept=".csv,text/csv" hidden>
+        <span class="dz-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="28" height="28"><path d="M12 16V4m0 0-4.5 4.5M12 4l4.5 4.5M5 15v3a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </span>
+        <span class="dz-title">Drop a CSV here, or <u>browse</u></span>
+        <span class="quiet" id="dz-status">Semicolon or comma separated</span>
+      </label>
+
+      <p class="error" id="batch-error" hidden></p>
+
+      <div id="batch-result" hidden>
+        <div class="card summary">
+          <div class="summary-head">
+            <div>
+              <span class="big-number" id="batch-rows"></span>
+              <span class="quiet">students scored</span>
+            </div>
+            <div class="summary-actions">
+              <span class="chip" id="batch-accuracy" hidden></span>
+              <button class="button" id="download" type="button">Download results</button>
+            </div>
+          </div>
+          <div class="stack" id="batch-stack"></div>
+          <ul class="legend" id="batch-legend"></ul>
+        </div>
+
+        <div class="card table-card">
+          <div class="card-head"><h3>Highest dropout risk</h3><span class="quiet" id="table-note"></span></div>
+          <div class="table-scroll">
+            <table>
+              <thead><tr><th>Row</th><th>Course</th><th>Prediction</th><th class="num">Dropout</th><th class="num">Enrolled</th><th class="num">Graduate</th></tr></thead>
+              <tbody id="batch-table"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Model -->
+    <section class="view" id="view-model" role="tabpanel" hidden>
+      <div class="view-head">
+        <h1>Model</h1>
+        <p class="lede" id="model-lede"></p>
+      </div>
+      <div class="tiles" id="tiles"></div>
+      <div class="card">
+        <div class="card-head"><h3>What the model relies on</h3></div>
+        <ul class="importance" id="importance"></ul>
+      </div>
+      <p class="footnote">Predictions are estimates for offering support early, never for decisions about a student on their own.</p>
+    </section>
+  </main>
+
+  <div class="toast" id="toast" role="status" hidden></div>
+  <script src="/static/app.js"></script>
+</body>
+</html>
